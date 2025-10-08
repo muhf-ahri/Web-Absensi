@@ -8,29 +8,17 @@ import {
   User, 
   Settings, 
   LogOut,
-  ChevronDown,
-  Sun,
-  Moon
+  ChevronDown
 } from 'lucide-react';
 
-const Headers = ({ onMenuToggle, sidebarOpen }) => {
+const Headers = ({ onMenuToggle }) => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [showUserDropdown, setShowUserDropdown] = useState(false);
-  const [darkMode, setDarkMode] = useState(false);
 
   const handleLogout = () => {
     logout();
     setShowUserDropdown(false);
-  };
-
-  const toggleDarkMode = () => {
-    setDarkMode(!darkMode);
-    if (!darkMode) {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
   };
 
   const userNavigation = [
@@ -102,19 +90,6 @@ const Headers = ({ onMenuToggle, sidebarOpen }) => {
               </div>
             </div>
 
-            {/* Dark Mode Toggle */}
-            <button
-              onClick={toggleDarkMode}
-              className="p-2 text-gray-500 hover:text-gray-900 hover:bg-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              title={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
-            >
-              {darkMode ? (
-                <Sun className="h-5 w-5" />
-              ) : (
-                <Moon className="h-5 w-5" />
-              )}
-            </button>
-
             {/* Notifications */}
             <button className="p-2 text-gray-500 hover:text-gray-900 hover:bg-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 relative">
               <Bell className="h-5 w-5" />
@@ -177,30 +152,6 @@ const Headers = ({ onMenuToggle, sidebarOpen }) => {
                 </>
               )}
             </div>
-          </div>
-        </div>
-
-        {/* Mobile Greeting */}
-        <div className="lg:hidden pb-4">
-          <h1 className="text-lg font-semibold text-gray-900">
-            {getGreeting()}, {user?.name}!
-          </h1>
-          <p className="text-sm text-gray-500">
-            Welcome back to your dashboard
-          </p>
-        </div>
-
-        {/* Mobile Search Bar */}
-        <div className="md:hidden pb-4">
-          <div className="relative">
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-              <Search className="h-5 w-5 text-gray-400" />
-            </div>
-            <input
-              type="text"
-              className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-              placeholder="Search..."
-            />
           </div>
         </div>
       </div>

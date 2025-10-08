@@ -21,17 +21,19 @@ const Layout = ({ children }) => {
         onToggle={() => setSidebarOpen(!sidebarOpen)} 
       />
       
-      {/* Main Content */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      {/* Main Content Area */}
+      <div className="flex-1 flex flex-col min-w-0">
         {/* Header */}
         <Header 
           onMenuToggle={() => setSidebarOpen(!sidebarOpen)} 
           sidebarOpen={sidebarOpen}
         />
         
-        {/* Page Content */}
-        <main className="flex-1 overflow-y-auto">
-          {children}
+        {/* Main Content */}
+        <main className="flex-1 overflow-y-auto focus:outline-none">
+          <div className="py-6">
+            {children}
+          </div>
         </main>
       </div>
     </div>
@@ -105,9 +107,7 @@ function App() {
   return (
     <Router>
       <AuthProvider>
-        <div className="min-h-screen bg-gray-50">
-          <AppRoutes />
-        </div>
+        <AppRoutes />
       </AuthProvider>
     </Router>
   );
