@@ -1,28 +1,23 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Eye, EyeOff, LogIn, Wifi, WifiOff } from 'lucide-react';
+import { Eye, EyeOff, LogIn, RefreshCw } from 'lucide-react';
 import Loading from '../common/Loading';
 
 const Login = () => {
   const [formData, setFormData] = useState({
-    email: '',
-    password: ''
+    email: 'admin@company.com', // Default untuk testing
+    password: 'admin123'
   });
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const { login, enableMockMode, mockMode } = useAuth();
+  const { login, backendStatus, retryBackendConnection } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
   const from = location.state?.from?.pathname || '/';
-
-  const demoCredentials = [
-    { email: 'admin@company.com', password: 'password123', role: 'admin', name: 'Demo Admin' },
-    { email: 'user@company.com', password: 'password123', role: 'user', name: 'Demo User' }
-  ];
 
   const handleChange = (e) => {
     setFormData({
@@ -32,38 +27,15 @@ const Login = () => {
     if (error) setError('');
   };
 
-  const handleDemoLogin = (demoUser) => {
-    setFormData({
-      email: demoUser.email,
-      password: demoUser.password
-    });
-    // Auto submit setelah 100ms
-    setTimeout(() => {
-      document.querySelector('form').dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
-    }, 100);
-  };
-
-  const enableDemoMode = async () => {
-    setIsLoading(true);
-    setError('');
-    try {
-      enableMockMode();
-      // Auto login dengan demo account pertama
-      const result = await login('admin@company.com', 'password123');
-      if (result.success) {
-        navigate(from, { replace: true });
-      } else {
-        setError('Failed to login with demo mode');
-      }
-    } catch (error) {
-      setError('Demo mode error: ' + error.message);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    // Prevent submission if backend is offline
+    if (backendStatus === 'offline') {
+      setError('Backend server is offline. Please start the backend server first.');
+      return;
+    }
+
     setIsLoading(true);
     setError('');
 
@@ -71,50 +43,32 @@ const Login = () => {
       const result = await login(formData.email, formData.password);
       
       if (result.success) {
+        console.log('✅ Login successful, redirecting...');
         navigate(from, { replace: true });
-      } else if (result.offerMock) {
-        setError(
-          <div className="text-center">
-            <WifiOff className="mx-auto h-8 w-8 text-orange-500 mb-3" />
-            <p className="text-orange-800 font-medium text-lg">Backend Server Unavailable</p>
-            <p className="text-orange-600 mt-2">The backend server is not running. You can use demo mode to explore the application.</p>
-            <div className="mt-4 space-y-3">
-              <button
-                type="button"
-                onClick={enableDemoMode}
-                className="w-full bg-orange-500 text-white py-3 px-4 rounded-lg font-semibold hover:bg-orange-600 transition-colors"
-              >
-                Enter Demo Mode
-              </button>
-              <p className="text-xs text-orange-500">
-                You can also try: admin@company.com / password123
-              </p>
-            </div>
-          </div>
-        );
       } else {
-        setError(result.message || 'Login failed. Please check your credentials.');
+        setError(result.message || 'Login failed');
       }
     } catch (error) {
       console.error('Login error:', error);
-      // Auto fallback to demo mode on any error
-      setError(
-        <div className="text-center">
-          <WifiOff className="mx-auto h-8 w-8 text-blue-500 mb-3" />
-          <p className="text-blue-800 font-medium">Auto-enabling Demo Mode</p>
-          <p className="text-blue-600 text-sm mt-1">You can explore the app with sample data</p>
-          <button
-            type="button"
-            onClick={enableDemoMode}
-            className="mt-3 bg-blue-500 text-white px-6 py-2 rounded-lg hover:bg-blue-600 transition-colors font-medium"
-          >
-            Continue with Demo
-          </button>
-        </div>
-      );
+      setError('An unexpected error occurred. Please try again.');
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleRetryConnection = async () => {
+    setIsLoading(true);
+    await retryBackendConnection();
+    setIsLoading(false);
+  };
+
+  const loadDemoCredentials = (type) => {
+    if (type === 'admin') {
+      setFormData({ email: 'admin@company.com', password: 'admin123' });
+    } else {
+      setFormData({ email: 'user@company.com', password: 'admin123' });
+    }
+    setError('');
   };
 
   return (
@@ -132,35 +86,63 @@ const Login = () => {
           </p>
         </div>
 
-        <div className="mt-4 flex justify-center">
-          <div className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${
-            mockMode 
-              ? 'bg-orange-100 text-orange-800' 
-              : 'bg-green-100 text-green-800'
-          }`}>
-            {mockMode ? (
-              <>
-                <WifiOff className="h-3 w-3 mr-1" />
-                Demo Mode
-              </>
-            ) : (
-              <>
-                <Wifi className="h-3 w-3 mr-1" />
-                Live Mode
-              </>
-            )}
-          </div>
-        </div>
-
         <div className="mt-8 bg-white py-8 px-6 shadow-xl sm:rounded-xl sm:px-10 border border-gray-200">
+          {/* Backend Status Indicator */}
+          <div className={`mb-6 p-3 rounded-lg border text-center ${
+            backendStatus === 'online' ? 'bg-green-50 border-green-200 text-green-700' :
+            backendStatus === 'offline' ? 'bg-red-50 border-red-200 text-red-700' :
+            'bg-yellow-50 border-yellow-200 text-yellow-700'
+          }`}>
+            <div className="flex items-center justify-center space-x-2">
+              {backendStatus === 'online' && (
+                <>
+                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                  <span className="text-sm font-medium">✅ Backend Connected</span>
+                </>
+              )}
+              {backendStatus === 'offline' && (
+                <>
+                  <div className="w-2 h-2 bg-red-500 rounded-full"></div>
+                  <span className="text-sm font-medium">❌ Backend Offline</span>
+                  <button
+                    onClick={handleRetryConnection}
+                    disabled={isLoading}
+                    className="ml-2 flex items-center text-red-600 hover:text-red-800 text-xs font-medium"
+                  >
+                    <RefreshCw className="h-3 w-3 mr-1" />
+                    Retry
+                  </button>
+                </>
+              )}
+              {backendStatus === 'checking' && (
+                <>
+                  <Loading size="small" />
+                  <span className="text-sm font-medium">🔄 Checking Backend...</span>
+                </>
+              )}
+            </div>
+          </div>
+
           <form className="space-y-6" onSubmit={handleSubmit}>
             {error && (
-              <div className={`p-4 rounded-lg border ${
-                typeof error === 'string' 
-                  ? 'bg-red-50 border-red-200 text-red-800'
-                  : 'bg-orange-50 border-orange-200'
-              }`}>
-                {error}
+              <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg">
+                <div className="flex items-center">
+                  <svg className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  {error}
+                </div>
+                {error.includes('backend') && (
+                  <div className="mt-2 text-sm space-y-1">
+                    <p className="font-medium">Troubleshooting steps:</p>
+                    <ol className="list-decimal list-inside ml-2 space-y-1">
+                      <li>Open terminal in backend folder</li>
+                      <li>Run: <code className="bg-gray-100 px-1 rounded">node server.js</code></li>
+                      <li>Wait for server startup message</li>
+                      <li>Click "Retry" button above</li>
+                    </ol>
+                  </div>
+                )}
               </div>
             )}
 
@@ -178,8 +160,8 @@ const Login = () => {
                   value={formData.email}
                   onChange={handleChange}
                   className="block w-full px-3 py-3 border border-gray-300 rounded-lg shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
-                  placeholder="you@company.com"
-                  disabled={isLoading}
+                  placeholder="admin@company.com"
+                  disabled={isLoading || backendStatus === 'offline'}
                 />
               </div>
             </div>
@@ -199,13 +181,13 @@ const Login = () => {
                   onChange={handleChange}
                   className="block w-full px-3 py-3 border border-gray-300 rounded-lg shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 pr-10 transition-colors"
                   placeholder="Enter your password"
-                  disabled={isLoading}
+                  disabled={isLoading || backendStatus === 'offline'}
                 />
                 <button
                   type="button"
                   className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 transition-colors"
                   onClick={() => setShowPassword(!showPassword)}
-                  disabled={isLoading}
+                  disabled={isLoading || backendStatus === 'offline'}
                 >
                   {showPassword ? (
                     <EyeOff className="h-5 w-5" />
@@ -216,82 +198,77 @@ const Login = () => {
               </div>
             </div>
 
+            {/* Quick Load Buttons */}
+            <div className="flex space-x-2">
+              <button
+                type="button"
+                onClick={() => loadDemoCredentials('admin')}
+                disabled={isLoading}
+                className="flex-1 bg-blue-100 text-blue-700 py-2 px-3 rounded text-sm hover:bg-blue-200 transition-colors disabled:opacity-50"
+              >
+                Load Admin
+              </button>
+              <button
+                type="button"
+                onClick={() => loadDemoCredentials('user')}
+                disabled={isLoading}
+                className="flex-1 bg-green-100 text-green-700 py-2 px-3 rounded text-sm hover:bg-green-200 transition-colors disabled:opacity-50"
+              >
+                Load User
+              </button>
+            </div>
+
+            {/* Demo Credentials Info */}
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-              <p className="text-sm font-medium text-blue-800 mb-2">Quick Demo Access:</p>
-              <div className="space-y-2">
-                {demoCredentials.map((demo, index) => (
-                  <button
-                    key={index}
-                    type="button"
-                    onClick={() => handleDemoLogin(demo)}
-                    className="w-full text-left text-sm text-blue-700 hover:text-blue-800 hover:bg-blue-100 px-3 py-2 rounded transition-colors border border-blue-200"
-                    disabled={isLoading}
-                  >
-                    <div className="font-medium">{demo.email}</div>
-                    <div className="text-xs text-blue-600">Password: password123 • Role: {demo.role}</div>
-                  </button>
-                ))}
+              <p className="text-sm font-medium text-blue-800 mb-2">Demo Credentials:</p>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-blue-700">Admin:</span>
+                  <span className="text-blue-600">admin@company.com / admin123</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-blue-700">User:</span>
+                  <span className="text-blue-600">user@company.com / admin123</span>
+                </div>
               </div>
             </div>
 
             <div>
               <button
                 type="submit"
-                disabled={isLoading}
+                disabled={isLoading || backendStatus === 'offline'}
                 className="group relative w-full flex justify-center items-center py-3 px-4 border border-transparent text-base font-medium rounded-lg text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm"
               >
                 {isLoading ? (
                   <>
                     <Loading size="small" />
-                    <span className="ml-2">Signing in...</span>
+                    <span className="ml-2">
+                      {backendStatus === 'checking' ? 'Checking backend...' : 'Signing in...'}
+                    </span>
                   </>
                 ) : (
                   <>
                     <LogIn className="h-5 w-5 mr-2" />
-                    Sign in to your account
+                    {backendStatus === 'offline' ? 'Backend Offline' : 'Sign in to your account'}
                   </>
                 )}
               </button>
-            </div>
-
-            <div className="text-center">
-              <div className="relative">
-                <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-gray-300" />
-                </div>
-                <div className="relative flex justify-center text-sm">
-                  <span className="px-2 bg-white text-gray-500">Or</span>
-                </div>
-              </div>
-
-              <div className="mt-4">
-                <button
-                  type="button"
-                  onClick={enableDemoMode}
-                  disabled={isLoading}
-                  className="w-full flex justify-center items-center py-2.5 px-4 border border-gray-300 rounded-lg shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 transition-colors"
-                >
-                  <WifiOff className="h-4 w-4 mr-2 text-gray-500" />
-                  Try Demo Mode (No Backend Required)
-                </button>
-                <p className="text-xs text-gray-500 mt-2">
-                  Explore the app with sample data without backend connection
-                </p>
-              </div>
             </div>
           </form>
 
           <div className="mt-8 pt-6 border-t border-gray-200">
             <div className="text-center">
-              <p className="text-xs text-gray-500">
-                {mockMode 
-                  ? "🔧 Running in demo mode with sample data" 
-                  : "🚀 Connect to backend server for full functionality"
-                }
+              <p className="text-xs text-gray-500 mb-1">
+                Backend Server Status
               </p>
-              <p className="text-xs text-gray-400 mt-1">
-                Backend: {mockMode ? 'Not Required' : 'Required on port 5000'}
+              <p className="text-xs text-gray-400">
+                http://localhost:5000
               </p>
+              {backendStatus === 'offline' && (
+                <p className="text-xs text-red-500 mt-1">
+                  Make sure backend is running: <code className="bg-gray-100 px-1 rounded">node server.js</code>
+                </p>
+              )}
             </div>
           </div>
         </div>

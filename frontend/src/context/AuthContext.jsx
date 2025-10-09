@@ -14,177 +14,112 @@ export const useAuth = () => {
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [mockMode, setMockMode] = useState(false);
-
-  // Mock data langsung di sini
-  const mockUsers = [
-    {
-      _id: '1',
-      name: 'Demo Admin',
-      email: 'admin@company.com',
-      role: 'admin',
-      position: 'System Administrator',
-      department: 'IT',
-      isActive: true
-    },
-    {
-      _id: '2',
-      name: 'Demo User',
-      email: 'user@company.com',
-      role: 'user',
-      position: 'Software Developer',
-      department: 'Engineering',
-      isActive: true
-    }
-  ];
-
-  const mockAuth = {
-    success: true,
-    token: 'demo-jwt-token-12345',
-    user: mockUsers[0]
-  };
+  const [backendStatus, setBackendStatus] = useState('checking'); // 'checking', 'online', 'offline'
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    const userData = localStorage.getItem('user');
-    const useMock = localStorage.getItem('useMock') === 'true';
-
-    console.log('Auth init - mockMode:', useMock, 'token:', !!token);
-
-    setMockMode(useMock);
-
-    if (useMock) {
-      // Mock mode - gunakan user dari localStorage atau default
-      if (userData) {
-        setUser(JSON.parse(userData));
-      } else {
-        // Set default demo user
-        setUser(mockUsers[0]);
-        localStorage.setItem('user', JSON.stringify(mockUsers[0]));
-        localStorage.setItem('token', 'demo-token');
-      }
-      setLoading(false);
-    } else if (token && userData) {
-      // Real mode - verify token dengan backend
-      verifyToken();
-    } else {
-      setLoading(false);
-    }
+    checkBackendConnection();
+    checkAuth();
   }, []);
 
-  const verifyToken = async () => {
+  // Check if backend is running
+  const checkBackendConnection = async () => {
     try {
-      const response = await authService.getMe();
-      setUser(response.user);
+      const response = await fetch('http://localhost:5000', {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      if (response.ok) {
+        setBackendStatus('online');
+        console.log('✅ Backend is running');
+      } else {
+        setBackendStatus('offline');
+        console.log('❌ Backend returned error status:', response.status);
+      }
     } catch (error) {
-      console.warn('Backend unavailable, switching to mock mode');
-      enableMockMode();
-    } finally {
-      setLoading(false);
+      setBackendStatus('offline');
+      console.log('🚨 Backend connection failed:', error.message);
     }
   };
 
-  const enableMockMode = () => {
-    console.log('Enabling mock mode');
-    setMockMode(true);
-    localStorage.setItem('useMock', 'true');
-    // Set default user untuk mock mode
-    if (!localStorage.getItem('user')) {
-      localStorage.setItem('user', JSON.stringify(mockUsers[0]));
-      localStorage.setItem('token', 'demo-token');
-      setUser(mockUsers[0]);
+  const checkAuth = async () => {
+    const token = localStorage.getItem('token');
+    const userData = localStorage.getItem('user');
+    
+    if (token && userData) {
+      try {
+        // Only try to get user data if backend is online
+        if (backendStatus === 'online') {
+          const response = await authService.getMe();
+          setUser(response.user);
+        } else {
+          // Use cached user data if backend is offline
+          setUser(JSON.parse(userData));
+        }
+      } catch (error) {
+        console.error('Auth check failed:', error);
+        // Don't logout immediately, keep cached data
+        if (error.message.includes('Network') || error.message.includes('backend')) {
+          console.log('Using cached user data due to backend connection issue');
+          setUser(JSON.parse(userData));
+        } else {
+          logout();
+        }
+      }
     }
-  };
-
-  const disableMockMode = () => {
-    setMockMode(false);
-    localStorage.setItem('useMock', 'false');
+    setLoading(false);
   };
 
   const login = async (email, password) => {
-    console.log('Login attempt:', email, 'mockMode:', mockMode);
-    
-    // Always allow demo credentials, regardless of mockMode
-    if (email === 'admin@company.com' && password === 'password123') {
-      console.log('Using demo credentials');
-      const mockResponse = {
-        ...mockAuth,
-        user: mockUsers[0]
-      };
+    try {
+      console.log('🔄 Starting login process...');
       
-      localStorage.setItem('token', mockResponse.token);
-      localStorage.setItem('user', JSON.stringify(mockResponse.user));
-      localStorage.setItem('useMock', 'true');
-      setUser(mockResponse.user);
-      setMockMode(true);
-      
-      return mockResponse;
-    }
-
-    if (email === 'user@company.com' && password === 'password123') {
-      console.log('Using demo user credentials');
-      const mockResponse = {
-        ...mockAuth,
-        user: mockUsers[1]
-      };
-      
-      localStorage.setItem('token', mockResponse.token);
-      localStorage.setItem('user', JSON.stringify(mockResponse.user));
-      localStorage.setItem('useMock', 'true');
-      setUser(mockResponse.user);
-      setMockMode(true);
-      
-      return mockResponse;
-    }
-
-    if (mockMode) {
-      // Mock login - cari user di mock data
-      const mockUser = mockUsers.find(u => u.email === email);
-      if (mockUser && password === 'password123') {
-        const mockResponse = {
-          ...mockAuth,
-          user: mockUser
-        };
-        
-        localStorage.setItem('token', mockResponse.token);
-        localStorage.setItem('user', JSON.stringify(mockResponse.user));
-        localStorage.setItem('useMock', 'true');
-        setUser(mockResponse.user);
-        setMockMode(true);
-        
-        return mockResponse;
-      } else {
+      // Check backend connection first
+      await checkBackendConnection();
+      if (backendStatus === 'offline') {
         return {
           success: false,
-          message: 'Invalid credentials'
+          message: 'Backend server is not running. Please make sure the backend server is started on port 5000.'
         };
       }
-    }
-    
-    // Real login dengan backend
-    try {
+
       const response = await authService.login(email, password);
+      
       if (response.success) {
         localStorage.setItem('token', response.token);
         localStorage.setItem('user', JSON.stringify(response.user));
-        localStorage.setItem('useMock', 'false');
         setUser(response.user);
-        setMockMode(false);
+        setBackendStatus('online');
+        console.log('✅ Login successful, user:', response.user.name);
       }
+      
       return response;
     } catch (error) {
-      console.error('Login error:', error);
-      // Jika backend error, tawarkan mock mode
-      if (error.code === 'NETWORK_ERROR' || error.response?.status === 0) {
-        return {
-          success: false,
-          message: 'Backend unavailable. Use demo mode?',
-          offerMock: true
-        };
+      console.error('❌ Login failed:', error);
+      
+      let message = 'Login failed';
+      
+      // Specific error handling
+      if (error.code === 'NETWORK_ERROR' || error.message.includes('Network Error')) {
+        message = 'Cannot connect to backend server. Please check if the backend is running on http://localhost:5000';
+      } else if (error.code === 'ECONNREFUSED') {
+        message = 'Connection refused. Backend server is not running on port 5000.';
+      } else if (error.response?.status === 0) {
+        message = 'Backend server is not accessible. Please start the backend server.';
+      } else if (error.response?.data?.message) {
+        message = error.response.data.message;
+      } else if (error.message) {
+        message = error.message;
       }
+      
+      setBackendStatus('offline');
+      
       return {
         success: false,
-        message: error.response?.data?.message || 'Login failed'
+        message,
+        backendStatus: 'offline'
       };
     }
   };
@@ -192,9 +127,13 @@ export const AuthProvider = ({ children }) => {
   const logout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
-    localStorage.removeItem('useMock');
     setUser(null);
-    setMockMode(false);
+    console.log('👋 User logged out');
+  };
+
+  const retryBackendConnection = async () => {
+    setBackendStatus('checking');
+    await checkBackendConnection();
   };
 
   const value = {
@@ -202,9 +141,8 @@ export const AuthProvider = ({ children }) => {
     login,
     logout,
     loading,
-    mockMode,
-    enableMockMode,
-    disableMockMode
+    backendStatus,
+    retryBackendConnection
   };
 
   return (

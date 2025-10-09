@@ -1,5 +1,5 @@
-import jwt from 'jsonwebtoken';
-import User from '../models/User.js';
+import { verifyToken } from '../utils/helpers.js';
+import { readDB } from '../utils/database.js';
 
 export const protect = async (req, res, next) => {
   try {
@@ -16,8 +16,25 @@ export const protect = async (req, res, next) => {
       });
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    req.user = await User.findById(decoded.id).select('-password');
+    const decoded = verifyToken(token);
+    if (!decoded) {
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid token'
+      });
+    }
+
+    const db = await readDB();
+    const user = db.users.find(u => u._id === decoded.id);
+    
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    req.user = user;
     next();
   } catch (error) {
     return res.status(401).json({
